@@ -6,10 +6,8 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Slice;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.transaction.annotation.Transactional;
 import study.data_jpa.dto.MemberDto;
@@ -314,5 +312,95 @@ class MemberRepositoryTest {
     @Test
     public void callCustom(){
         List<Member> result = memberRepository.findMemberCustom();
+    }
+
+    @Test
+    public void specBasic(){
+        //given
+        Team teamA = new Team("teamA");
+        em.persist(teamA);
+
+        Member m1 = new Member("m1", 0, teamA);
+        Member m2 = new Member("m2", 0, teamA);
+        em.persist(m1);
+        em.persist(m2);
+
+        em.flush();
+        em.clear();
+
+        //when
+        //Specification
+//        Specification<Member> spec = MemberSpec.username("m1").and(MemberSpec.teamName("teamA"));
+//        List<Member> result = memberRepository.findAll(spec);
+//        Assertions.assertThat(result.size()).isEqualTo(1);
+
+        //Probe Query By Example
+        //java의 기본 타입을 이용하는 칼럼의 경우 null 값을 리턴하지 않기 때문에
+        // 이 경우 int 인 age 는 0 이기 때문에 age = 0 조건이 추가된다.
+        // 이를 무시하는 withIgnorePaths 옵션을 추가해야 한다.
+        Member member = new Member("m1");
+        Team team = new Team("teamA");
+        member.setTeam(team);//Team 과의 연관 관계 조건 추가
+
+        ExampleMatcher matcher = ExampleMatcher.matching()
+                .withIgnorePaths("age");
+        Example<Member> example = Example.of(member, matcher);
+        List<Member> result = memberRepository.findAll(example);
+
+        assertThat(result.get(0).getUsername()).isEqualTo("m1");
+    }
+
+    @Test
+    public void projections(){
+        //given
+        Team teamA = new Team("teamA");
+        em.persist(teamA);
+
+        Member m1 = new Member("m1", 0, teamA);
+        Member m2 = new Member("m2", 0, teamA);
+        em.persist(m1);
+        em.persist(m2);
+
+        em.flush();
+        em.clear();
+
+        //when
+//        List<UsernameOnlyDto> m11 = memberRepository.findProjectionByUsername("m1",UsernameOnlyDto.class);
+//        for (UsernameOnlyDto usernameOnly : m11) {
+//            System.out.println("usernameOnly = "+ usernameOnly);
+//        }
+        //중첩 구조
+        List<NestedClosedProjection> m11 = memberRepository.findProjectionByUsername("m1",NestedClosedProjection.class);
+        for (NestedClosedProjection nestedClosedProjection : m11) {
+            String username = nestedClosedProjection.getUsername();
+            System.out.println("username = "+username);
+            String teamName = nestedClosedProjection.getTeam().getName();
+            System.out.println("teamName = "+teamName);
+        }
+
+    }
+
+    @Test
+    public void nativeQuery(){
+        //given
+        Team teamA = new Team("teamA");
+        em.persist(teamA);
+
+        Member m1 = new Member("m1", 0, teamA);
+        Member m2 = new Member("m2", 0, teamA);
+        em.persist(m1);
+        em.persist(m2);
+
+        em.flush();
+        em.clear();
+
+        //when
+//        Member result = memberRepository.findByNativeQuery("m1");
+//        System.out.println("result = "+result);
+        Page<MemberProjection> result = memberRepository.findByNativeProjection(PageRequest.of(0, 10));
+        List<MemberProjection> content = result.getContent();
+        for (MemberProjection memberProjection : content) {
+            System.out.println("memberProjection = "+ memberProjection.getUsername()+", "+memberProjection.getTeamName());
+        }
     }
 }
